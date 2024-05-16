@@ -1,0 +1,247 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8" />
+    <title>Membuat Game Phaser 3 Pertama Anda - Bagian 10</title>
+    <script src="phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+            background-size: contain;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+var config = {
+    type: Phaser.AUTO,
+    width: 1800,
+    height: 700,
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 300 },
+            debug: false
+        }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
+var stars;
+var backgroundSound;
+var player;
+var star;
+var bombs;
+var platforms;
+var cursors;
+var score = 0;
+var gameOver = false;
+var scoreText;
+var starSound;
+var bombSound;
+var gameOverImage; // variabel untuk menyimpan gambar game over
+
+var game = new Phaser.Game(config);
+
+function preload ()
+{
+    // Memuat semua aset yang dibutuhkan untuk permainan
+    this.load.image('background', 'assets/background2.png');
+    this.load.image('ground', 'assets/land.png');
+    this.load.image('electric', 'assets/electric.png');
+    this.load.image('bomb', 'assets/bomb.png');
+    this.load.spritesheet('robot', 'assets/robo.png', { frameWidth: 29.5, frameHeight: 50 });
+    this.load.audio('starSound', 'audio/audiostar.mp3');
+    this.load.audio('bombSound', 'audio/audiobomb.mp3');
+    this.load.image('gameOver', 'assets/gameover.png');
+    this.load.audio('backgroundSound', 'audio/audiogame.mp3');
+}
+
+function create ()
+{
+    // Putar suara latar belakang
+    backgroundSound = this.sound.add('backgroundSound');
+    backgroundSound.play();
+    backgroundSound.loop = true;
+
+    // Menambahkan latar belakang sederhana untuk permainan
+    this.add.image(800, 400, 'background');
+
+    // Grup platforms berisi tanah dan dua platform yang bisa kita loncati
+    platforms = this.physics.add.staticGroup();
+
+    platforms.create(200, 700, 'ground').setScale(12, 4).refreshBody();
+
+    // Membuat platform-platform lainnya
+    platforms.create(930, 380, 'ground');
+    platforms.create(1230, 280, 'ground');
+    platforms.create(420, 400, 'ground').setScale(1.6, 1).refreshBody();
+    platforms.create(700, 550, 'ground').setScale(0.9, 1).refreshBody();
+    platforms.create(130, 300, 'ground').setScale(0.9, 1).refreshBody();
+    
+
+    // Membuat karakter pemain dan pengaturannya
+    player = this.physics.add.sprite(100, 450, 'robot');
+
+    // Sifat fisika pemain. Memberikan pemain sedikit lompatan.
+    player.setBounce(0.2);
+    player.setCollideWorldBounds(true);
+    
+    // Animasi pemain, berjalan ke kiri, ke kanan, atau diam
+    this.anims.create({
+        key: 'left',
+        frames: this.anims.generateFrameNumbers('robot', { start: 0, end: 3 }),
+        frameRate: 10,
+        repeat: -1
+    });
+
+    this.anims.create({
+        key: 'turn',
+        frames: [ { key: 'robot', frame: 4 } ],
+        frameRate: 20
+    });
+
+    this.anims.create({
+        key: 'right',
+        frames: this.anims.generateFrameNumbers('robot', { start: 5, end: 8 }),
+        frameRate: 10,
+        repeat: -1
+    });
+
+    // Input dari keyboard
+    cursors = this.input.keyboard.createCursorKeys();
+
+    // Menambahkan bintang yang bisa dikumpulkan
+    stars = this.physics.add.group({
+        key: 'electric',
+        repeat: 13,
+        setXY: { x: 60, y: 0, stepX: 70 }
+    });
+
+    stars.children.iterate(function (child) {
+
+        // Memberikan setiap bintang lompatan yang sedikit berbeda
+        child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+
+    });
+
+    bombs = this.physics.add.group();
+
+    // Skor
+    scoreText = this.add.text(16, 16, 'Skor: 0', { fontSize: '32px', fill: '#fff' });
+
+    // Memuat suara bintang
+    starSound = this.sound.add('starSound');
+
+    bombSound = this.sound.add('bombSound');
+
+    // Kolid pemain dan bintang dengan platform
+    this.physics.add.collider(player, platforms);
+    this.physics.add.collider(stars, platforms);
+    this.physics.add.collider(bombs, platforms);
+
+    // Memeriksa jika pemain bertabrakan dengan bintang
+    this.physics.add.overlap(player, stars, collectStar, null, this);
+
+    this.physics.add.collider(player, bombs, hitBomb, null, this);
+
+    gameOverImage = this.add.image(config.width / 2, config.height / 2, 'gameOver');
+    gameOverImage.setOrigin(0.5); // Mengatur titik pusat gambar
+    gameOverImage.setVisible(false); // Sembunyikan gambar game over secara awal
+}
+
+//Mengatur Arah Karakter Pada Game
+function update ()
+{
+    if (cursors.left.isDown)
+    {
+        player.setVelocityX(-160);
+        player.anims.play('left', true);
+        player.flipX = true; // Mengatur karakter untuk diputar saat bergerak ke kiri
+    }
+    else if (cursors.right.isDown)
+    {
+        player.setVelocityX(160);
+        player.anims.play('right', true);
+        player.flipX = false; // Mengembalikan karakter ke posisi semula saat bergerak ke kanan
+    }
+    else
+    {
+        player.setVelocityX(0);
+        player.anims.play('turn');
+    }
+
+    if (cursors.up.isDown && player.body.touching.down)
+    {
+        player.setVelocityY(-330);
+    }
+
+    if (gameOver)
+    {
+        return;
+    }
+}
+
+function collectStar (player, electric)
+{
+    electric.disableBody(true, true);
+
+    // Menambahkan dan memperbarui skor
+    score += 10;
+    scoreText.setText('Skor: ' + score);
+
+    // Memutar suara bintang
+    starSound.play();
+
+    if (stars.countActive(true) === 0)
+    {
+        // Menampilkan bintang baru untuk dikumpulkan
+        stars.children.iterate(function (child) {
+
+            child.enableBody(true, child.x, 0, true, true);
+
+        });
+
+        var x = (player.x < 400) ? Phaser.Math.Between(600, 800) : Phaser.Math.Between(0, 400);
+
+        var bomb = bombs.create(x, 18, 'bomb');
+        bomb.setBounce(1);
+        bomb.setCollideWorldBounds(true);
+        bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+        bomb.allowGravity = false;
+
+    }
+}
+
+function hitBomb (player, bomb)
+{
+    backgroundSound.stop();
+    starSound.stop();
+
+    this.physics.pause();
+
+    player.setTint(0xff0000);
+
+    player.anims.play('turn');
+
+    bombSound.play();
+
+    gameOver = true;
+
+    // Tampilkan gambar game over setelah jeda 2 detik
+    setTimeout(function() {
+        gameOverImage.setVisible(true);
+    }, 2000);
+}
+
+
+
+
+</script>
+</body>
+</html>
